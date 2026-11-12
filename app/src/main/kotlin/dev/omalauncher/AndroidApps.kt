@@ -33,6 +33,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asAndroidPath
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.PathParser
+import dev.omalauncher.theme.IconPackStore
 import dev.omalauncher.ui.iconMask
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -183,6 +184,7 @@ fun pinnedIds(
  */
 class AndroidAppCatalog(
     private val context: Context,
+    private val iconPacks: IconPackStore? = null,
 ) {
     val apps = mutableStateListOf<AndroidApp>()
 
@@ -505,6 +507,13 @@ class AndroidAppCatalog(
         }.onFailure { Log.w(TAG, "cannot uninstall ${app.component}", it) }
     }
 
+    /** Clears cached app icons and lists them again (icon pack or monochrome change). */
+    fun reloadIcons() {
+        icons.clear()
+        masks.clear()
+        reload()
+    }
+
     private fun reload(evict: String? = null) {
         loading?.cancel()
         loading =
@@ -577,7 +586,11 @@ class AndroidAppCatalog(
                 // otherwise wait their turn in the alphabet.
                 val first = iconsFirst()
                 for ((info, app) in infos.sortedBy { it.second.key !in first }) {
-                    if (app.key !in icons) loadIcon(app.key, app.profile, app.clone) { info.getIcon(0) }
+                    if (app.key !in icons) {
+                        loadIcon(app.key, app.profile, app.clone) {
+                            iconPacks?.drawableFor(app.component) ?: info.getIcon(0)
+                        }
+                    }
                 }
                 // Apps change a shortcut's icon without an update, so these are drawn again each time; there are only a few.
                 for ((info, shortcut) in made) {

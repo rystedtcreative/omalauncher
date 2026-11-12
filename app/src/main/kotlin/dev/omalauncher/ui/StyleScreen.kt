@@ -119,6 +119,11 @@ fun StyleScreen(
     var installOpen by remember { mutableStateOf(false) }
     var removing by remember { mutableStateOf<OmarchyTheme?>(null) }
     val linux by runtime.bootstrap.state.collectAsState()
+    var manageIconPack by remember { mutableStateOf(false) }
+    if (manageIconPack) {
+        IconPackIconsScreen(runtime, onDismiss = { manageIconPack = false }, onAgent = onAgent)
+        return
+    }
     OverlayPanel(stringResource(R.string.style_title), onDismiss) {
         Column(Modifier.verticalScroll(rememberScrollState())) {
             ThemeSection(
@@ -135,6 +140,7 @@ fun StyleScreen(
             Heading(R.string.style_home_screen)
             val style = runtime.style
             Flag(R.string.style_icons, R.string.style_monochrome, R.string.style_colored, style, Style.MONOCHROME_ICONS)
+            IconPackOption(runtime, style, onManage = { manageIconPack = true })
             Flag(R.string.style_home_apps, R.string.style_boxed, R.string.style_icon_only, style, Style.APP_TILES)
             Flag(R.string.style_recent_apps, R.string.style_shown, R.string.style_hidden, style, Style.RECENT_APPS)
             Flag(R.string.style_empty_page_left, R.string.style_shown, R.string.style_hidden, style, Style.EMPTY_PAGE_LEFT)
@@ -659,6 +665,50 @@ private fun FontOption(
         value = { BasicText(label(selected), Modifier.weight(1f, fill = false), style = Mono.copy(color = Palette.foreground), maxLines = 1, overflow = TextOverflow.Ellipsis) },
     ) { close ->
         ChoicePopup(families, selected, BelowAnchorStart, onDismiss = close, onPick = onSelect, label = label)
+    }
+}
+
+/** Installed icon packs plus system; [onManage] opens the per-app picker when a pack is selected. */
+@Composable
+private fun IconPackOption(
+    runtime: Runtime,
+    style: StyleStore,
+    onManage: () -> Unit,
+) {
+    val system = stringResource(R.string.style_icon_pack_system)
+    val packs = remember { runtime.iconPacks.installedPacks() }
+    val selectedPkg = style.style[Style.ICON_PACK]
+    val selectedLabel = packs.firstOrNull { it.packageName == selectedPkg }?.label ?: system
+    val choices = listOf(null to system) + packs.map { it.packageName to it.label }
+    DropdownOption(
+        stringResource(R.string.style_icon_pack),
+        value = {
+            BasicText(selectedLabel, Modifier.weight(1f, fill = false), style = Mono.copy(color = Palette.foreground), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        },
+    ) { close ->
+        ChoicePopup(
+            choices.map { it.first },
+            selectedPkg,
+            BelowAnchorStart,
+            onDismiss = close,
+            onPick = { pkg ->
+                style.update { it.with(Style.ICON_PACK, pkg) }
+                // snapshotFlow reloads icons; set the pack immediately so manage can open with it active.
+                runtime.iconPacks.setPackage(pkg)
+                runtime.androidApps.reloadIcons()
+            },
+            label = { pkg -> choices.firstOrNull { it.first == pkg }?.second ?: system },
+        )
+    }
+    if (selectedPkg != null) {
+        BasicText(
+            "[ ${stringResource(R.string.style_icon_pack_manage)} ]",
+            Modifier
+                .padding(start = LabelWidth)
+                .clickable(onClick = onManage)
+                .padding(vertical = 4.dp),
+            style = Mono.copy(color = Palette.accent),
+        )
     }
 }
 

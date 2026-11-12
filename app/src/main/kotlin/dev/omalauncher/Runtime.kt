@@ -39,6 +39,8 @@ import dev.omalauncher.linux.defaultApps
 import dev.omalauncher.linux.matches
 import dev.omalauncher.linux.run
 import dev.omalauncher.linux.shellQuote
+import dev.omalauncher.theme.IconOverrides
+import dev.omalauncher.theme.IconPackStore
 import dev.omalauncher.theme.Style
 import dev.omalauncher.theme.StyleStore
 import dev.omalauncher.theme.ThemeStore
@@ -96,11 +98,13 @@ class Runtime(
     val keyboard = KeyboardBridge(wm, guestImages)
     val terminals = TerminalTiles(this)
     val style = StyleStore(context)
+    val iconOverrides = IconOverrides(LauncherData.styleDir(context))
+    val iconPacks = IconPackStore(context, iconOverrides)
     val terminalFont = TerminalFont(proot, style)
     val launcherFont = LauncherFont(proot, style, context.resources).also { it.restore() }
     val gestures = Gestures(context, style)
     val linuxApps = LinuxAppCatalog(context, proot)
-    val androidApps = AndroidAppCatalog(context)
+    val androidApps = AndroidAppCatalog(context, iconPacks)
     val usage = AppUsage(context)
     val themes = ThemeStore(context, proot, style, isLinux = { linux }, onConfigChanged = ::syncGuest)
     private val audio = AudioBridge(proot)
@@ -199,6 +203,14 @@ class Runtime(
         }
         scope.launch {
             snapshotFlow { style.style[Style.FONT] }.drop(1).collect { launcherFont.apply() }
+        }
+        // Icon pack: apply the saved choice, then again whenever style.toml changes it.
+        iconPacks.setPackage(style.style[Style.ICON_PACK])
+        scope.launch {
+            snapshotFlow { style.style[Style.ICON_PACK] }.drop(1).collect { pkg ->
+                iconPacks.setPackage(pkg)
+                androidApps.reloadIcons()
+            }
         }
         // The recent strip's and home's pinned apps.
         androidApps.iconsFirst = {

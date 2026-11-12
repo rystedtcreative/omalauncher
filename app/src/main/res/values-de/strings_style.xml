@@ -14,6 +14,14 @@
 
     <string name="style_icons">symbole</string>
     <string name="style_monochrome">monochrom</string>
+    <string name="style_icon_pack">icon-pack</string>
+    <string name="style_icon_pack_system">system</string>
+    <string name="style_icon_pack_manage">fehlende icons…</string>
+    <string name="style_icon_pack_missing">apps ohne pack-icon</string>
+    <string name="style_icon_pack_suggest">fehlende mit agent vorschlagen</string>
+    <string name="style_icon_pack_review">vorschläge prüfen</string>
+    <string name="style_icon_pack_no_suggestions">noch keine vorschläge — erst vorschlagen lassen</string>
+    <string name="style_icon_pack_accept_all">alle übernehmen</string>
     <string name="style_colored">farbig</string>
     <string name="style_home_apps">start-apps</string>
     <string name="style_boxed">gerahmt</string>
