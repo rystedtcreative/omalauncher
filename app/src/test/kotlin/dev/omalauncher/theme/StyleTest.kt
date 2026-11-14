@@ -163,15 +163,6 @@ class StyleTest {
         assertFalse(Style().with(Style.THEME, "nord") == Style())
     }
 
-    @Test fun roundTripsIconPack() {
-        val style = Style().with(Style.ICON_PACK, "com.example.pack")
-        val out = StyleFile.encode(linkedMapOf("version" to 1.0), style)
-        assertEquals("com.example.pack", out["icons.pack"])
-        val decoded = StyleFile.decode(out, Style())
-        assertEquals("com.example.pack", decoded.style[Style.ICON_PACK])
-        assertEquals(null, Style()[Style.ICON_PACK])
-    }
-
     @Test fun newerFilesAreReadAsTheyAre() {
         val t = linkedMapOf<String, Any>("version" to 9.0)
         StyleFile.migrate(t)

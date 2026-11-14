@@ -206,11 +206,7 @@ class Style(
         val KEYBAR_BORDER_WIDTH = Setting.Number("keybar.border-width", 2.0, 0.0..8.0, "How thick the terminal key bar's frame is, in dp. 0 draws none.")
 
         val MONOCHROME_ICONS = Setting.Flag("icons.monochrome", false, "App icons as silhouettes in the accent color, as on Omarchy, rather than in their own colors.")
-        val ICON_PACK =
-            Setting.Name(
-                "icons.pack",
-                "An installed icon pack's package name for Android app icons; unset uses each app's own icon.",
-            )
+        val ICON_PACK = Setting.Name("icons.pack", "An installed icon pack's package name (Arcticons: \"com.donnnno.arcticons\") whose icons Android apps take; apps it doesn't cover keep their own. Unset: apps' own icons. Works with icons.monochrome.")
 
         val CORNER_SCALE = Setting.Number("corners.scale", 0.0, 0.0..2.0, "Multiplies every frame's corner radius: 0 square (Omarchy), 0.5 soft, 1 round like stock Android.")
 

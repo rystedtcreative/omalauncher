@@ -14,15 +14,17 @@
 
     <string name="style_icons">ícones</string>
     <string name="style_monochrome">monocromáticos</string>
-    <string name="style_icon_pack">pacote de ícones</string>
-    <string name="style_icon_pack_system">sistema</string>
-    <string name="style_icon_pack_manage">ícones em falta…</string>
-    <string name="style_icon_pack_missing">apps sem ícone do pacote</string>
-    <string name="style_icon_pack_suggest">sugerir em falta com o agente</string>
-    <string name="style_icon_pack_review">rever sugestões</string>
-    <string name="style_icon_pack_no_suggestions">ainda sem sugestões — execute sugerir primeiro</string>
-    <string name="style_icon_pack_accept_all">aceitar todas</string>
     <string name="style_colored">coloridos</string>
+    <string name="style_icon_pack">pacote de ícones</string>
+    <string name="style_icon_pack_none">nenhum</string>
+    <string name="style_icon_pack_manage">ícones que faltam…</string>
+    <string name="style_icon_pack_missing">apps sem ícone do pacote</string>
+    <string name="style_icon_pack_suggest">sugerir os que faltam com o agente</string>
+    <string name="style_icon_pack_review">revisar sugestões</string>
+    <string name="style_icon_pack_no_suggestions">ainda não há sugestões — sugira primeiro</string>
+    <string name="style_icon_pack_accept_all">aceitar todas</string>
+    <string name="style_icon_pack_overridden">apps com ícone substituído</string>
+    <string name="style_icon_pack_clear">limpar substituição</string>
     <string name="style_home_apps">apps no início</string>
     <string name="style_boxed">em caixa</string>
     <string name="style_icon_only">só ícone</string>
