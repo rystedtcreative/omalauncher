@@ -17,4 +17,27 @@ class IconPackTest {
         assertNull(IconPack.appfilterComponent(""))
         assertNull(IconPack.appfilterComponent("ComponentInfo{com.example/}"))
     }
+
+    @Test fun drawableXmlListsItemDrawables() {
+        val xml =
+            """
+            <resources>
+              <iconback img1="back" />
+              <item drawable="settings" />
+              <item drawable="" />
+              <item component="ComponentInfo{a/b}" />
+              <ITEM DRAWABLE="example" extra="1"></ITEM>
+              <item drawable="settings" />
+            </resources>
+            """.trimIndent()
+        assertEquals(listOf("settings", "example"), IconPack.drawableNames(xml))
+    }
+
+    @Test fun catalogUsesDrawableXmlAndFallsBackToAppfilter() {
+        // A drawable.xml wins, and isn't merged with appfilter names.
+        assertEquals(listOf("a", "b"), IconPack.catalogNames(listOf("b", "a", "b"), listOf("zzz")))
+        // None listed: the appfilter's names, blanks and duplicates dropped.
+        assertEquals(listOf("one", "two"), IconPack.catalogNames(emptyList(), listOf("two", "one", "two", " ")))
+        assertEquals(listOf("kept"), IconPack.catalogNames(listOf(" ", "kept"), listOf("other")))
+    }
 }
