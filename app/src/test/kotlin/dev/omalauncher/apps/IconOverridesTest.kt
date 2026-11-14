@@ -110,4 +110,33 @@ class IconOverridesTest {
         assertEquals(emptyMap<String, String>(), store.readSuggestions())
         assertFalse(file.exists())
     }
+
+    @Test fun partitionsOverriddenCoveredAndMissing() {
+        // "d" is both overridden and covered: the override wins, so it isn't also covered or missing.
+        val apps = listOf("a", "b", "c", "d")
+        val groups =
+            partitionIconApps(
+                apps,
+                hasOverride = { it == "a" || it == "d" },
+                covers = { it == "b" || it == "d" },
+            )
+        assertEquals(listOf("a", "d"), groups.overridden)
+        assertEquals(listOf("b"), groups.covered)
+        assertEquals(listOf("c"), groups.missing)
+    }
+
+    @Test fun suggestBriefSkipsCoveredAndOverridden() {
+        val apps =
+            listOf(
+                "Phone" to "phone/Main",
+                "Mail" to "mail/Main",
+                "Maps" to "maps/Main",
+                "Clock" to "clock/Main",
+            )
+        // Clock is covered and overridden; both keep it out of the brief. Order of the rest is kept.
+        assertEquals(
+            listOf("Phone" to "phone/Main"),
+            suggestBriefRows(apps, overridden = setOf("mail/Main", "clock/Main"), covered = setOf("maps/Main", "clock/Main")),
+        )
+    }
 }

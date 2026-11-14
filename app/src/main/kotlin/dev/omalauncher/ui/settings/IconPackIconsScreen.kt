@@ -5,6 +5,7 @@ import android.graphics.Canvas
 import android.graphics.drawable.Drawable
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,8 +20,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items as gridItems
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -30,36 +35,47 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.omalauncher.R
 import dev.omalauncher.Runtime
 import dev.omalauncher.apps.AndroidApp
+import dev.omalauncher.apps.IconAppGroups
 import dev.omalauncher.apps.IconOverrides
 import dev.omalauncher.apps.IconPack
 import dev.omalauncher.apps.IconPackPrompts
 import dev.omalauncher.apps.iconComponentKey
+import dev.omalauncher.apps.partitionIconApps
+import dev.omalauncher.apps.suggestBriefRows
 import dev.omalauncher.storage.LauncherData
 import dev.omalauncher.theme.Style
 import dev.omalauncher.ui.BracketAction
+import dev.omalauncher.ui.LauncherStyle
 import dev.omalauncher.ui.Mono
 import dev.omalauncher.ui.OverlayPanel
 import dev.omalauncher.ui.Palette
 import dev.omalauncher.ui.SectionLabel
 import dev.omalauncher.ui.TextSize
+import dev.omalauncher.ui.frame
+import dev.omalauncher.ui.leavesUpDown
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * Apps the current icon pack doesn't cover, and the ones given another of its drawables.
- * A pick, a clear or an accepted suggestion moves the app between the two lists on this screen.
+ * Every app's icon from the current pack: overridden, covered by the pack, or neither.
+ * A pick, a clear or an accepted suggestion moves the app between those lists on this screen.
+ * Suggest still sends only apps the pack doesn't cover and the user hasn't overridden.
  */
 @Composable
 fun IconPackIconsScreen(
@@ -82,22 +98,24 @@ fun IconPackIconsScreen(
             value = pack?.let { withContext(Dispatchers.IO) { it.catalog() } }
         }
     // revision is snapshot state; the override map is not. Reading it here is what moves an app between the lists.
-    val overridden by remember {
-        derivedStateOf {
-            overrides.revision
-            val pack = runtime.style.style[Style.ICON_PACK]
-            if (pack == null) emptyList() else apps.filter { overrides.get(pack, iconComponentKey(it.component)) != null }
-        }
-    }
-    val missing by remember {
+    // Until the pack's appfilter is read, covered and missing stay empty so they don't flash in as missing.
+    val groups by remember {
         derivedStateOf {
             overrides.revision
             val pack = runtime.style.style[Style.ICON_PACK]
             val iconPack = loadedState.value
             if (pack == null || iconPack == null) {
-                emptyList()
+                // No pack yet: show overrides only. Putting the rest in "missing" would flash, then move them.
+                val mappings: Map<String, String> = if (pack == null) emptyMap() else overrides.forPack(pack)
+                IconAppGroups(apps.filter { mappings[iconComponentKey(it.component)] != null }, emptyList(), emptyList())
             } else {
-                apps.filter { app -> overrides.get(pack, iconComponentKey(app.component)) == null && !iconPack.covers(app.component) }
+                val loaded = iconPack
+                val mappings = overrides.forPack(pack)
+                partitionIconApps(
+                    apps,
+                    hasOverride = { mappings[iconComponentKey(it.component)] != null },
+                    covers = { loaded.covers(it.component) },
+                )
             }
         }
     }
@@ -115,12 +133,15 @@ fun IconPackIconsScreen(
     val chosen = picking
     val chosenPack = loadedState.value
     when {
-        chosen != null && chosenPack != null ->
+        chosen != null && chosenPack != null -> {
+            val packId = runtime.style.style[Style.ICON_PACK]
+            val current = overrides.revision.let { if (packId == null) null else overrides.get(packId, iconComponentKey(chosen.component)) }
             DrawablePicker(
                 pack = chosenPack,
                 names = catalogState.value.orEmpty(),
                 app = chosen,
                 dpi = dpi,
+                current = current,
                 onDismiss = { picking = null },
                 onPick = { name ->
                     val pack = runtime.style.style[Style.ICON_PACK]
@@ -139,6 +160,7 @@ fun IconPackIconsScreen(
                     picking = null
                 },
             )
+        }
         reviewing ->
             SuggestionsReview(
                 runtime = runtime,
@@ -157,7 +179,14 @@ fun IconPackIconsScreen(
                         .clickable {
                             val pack = loadedState.value ?: return@clickable
                             val name = runtime.style.style[Style.ICON_PACK] ?: return@clickable
-                            val rows = missing.map { it.label to iconComponentKey(it.component) }
+                            val covered = HashSet<String>()
+                            for (app in apps) if (pack.covers(app.component)) covered += iconComponentKey(app.component)
+                            val rows =
+                                suggestBriefRows(
+                                    apps.map { it.label to iconComponentKey(it.component) },
+                                    overrides.forPack(name).keys,
+                                    covered,
+                                )
                             scope.launch {
                                 withContext(Dispatchers.IO) {
                                     IconPackPrompts.writeBrief(
@@ -178,16 +207,24 @@ fun IconPackIconsScreen(
                     style = Mono.copy(color = Palette.accent),
                 )
                 LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
-                    if (overridden.isNotEmpty()) {
+                    if (groups.overridden.isNotEmpty()) {
                         item(key = "overridden") { SectionLabel(stringResource(R.string.style_icon_pack_overridden)) }
-                        items(overridden, key = { "o-${it.key}" }) { app ->
+                        items(groups.overridden, key = { "o-${it.key}" }) { app ->
                             OverrideRow(overrides, runtime.style.style[Style.ICON_PACK].orEmpty(), app, loadedState.value, dpi) {
                                 if (loadedState.value != null) picking = app
                             }
                         }
                     }
+                    if (groups.covered.isNotEmpty()) {
+                        item(key = "covered") { SectionLabel(stringResource(R.string.style_icon_pack_covered)) }
+                        items(groups.covered, key = { "c-${it.key}" }) { app ->
+                            PackAppRow(app.label, loadedState.value?.drawableName(app.component), loadedState.value, dpi) {
+                                if (loadedState.value != null) picking = app
+                            }
+                        }
+                    }
                     item(key = "missing") { SectionLabel(stringResource(R.string.style_icon_pack_missing)) }
-                    items(missing, key = { "m-${it.key}" }) { app ->
+                    items(groups.missing, key = { "m-${it.key}" }) { app ->
                         AppRow(app.label, runtime.androidApps.icons[app.key]) { if (loadedState.value != null) picking = app }
                     }
                 }
@@ -206,13 +243,24 @@ private fun OverrideRow(
 ) {
     // Subscribes to the counter so a new drawable shows without the row leaving the list.
     val drawable = overrides.revision.let { overrides.get(pack, iconComponentKey(app.component)) }
+    PackAppRow(app.label, drawable, iconPack, dpi, onClick)
+}
+
+@Composable
+private fun PackAppRow(
+    label: String,
+    drawable: String?,
+    iconPack: IconPack?,
+    dpi: Int,
+    onClick: () -> Unit,
+) {
     Row(
         Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (drawable != null && iconPack != null) PackDrawable(iconPack, drawable, dpi, 40.dp) else PackIcon(null, 40.dp)
         Column(Modifier.padding(start = 12.dp).weight(1f)) {
-            BasicText(app.label, style = Mono.copy(color = Palette.foreground), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            BasicText(label, style = Mono.copy(color = Palette.foreground), maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (drawable != null) BasicText(drawable, style = Mono.copy(color = Palette.muted, fontSize = TextSize.Small), maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
@@ -239,26 +287,76 @@ private fun DrawablePicker(
     names: List<String>,
     app: AndroidApp,
     dpi: Int,
+    /** The override in effect, or null when this app has none. */
+    current: String?,
     onDismiss: () -> Unit,
     onPick: (String) -> Unit,
     onClear: () -> Unit,
 ) {
+    var query by remember { mutableStateOf("") }
+    val shown = remember(names, query) { IconPack.filterDrawableNames(names, query) }
+    val grid = rememberLazyGridState()
+    // The field starts empty, so the grid is [names] until the catalog arrives and the user types.
+    LaunchedEffect(current, names) {
+        if (query.isNotBlank()) return@LaunchedEffect
+        val mark = current ?: return@LaunchedEffect
+        val index = shown.indexOf(mark)
+        if (index >= 0) grid.scrollToItem(index)
+    }
     OverlayPanel(app.label, onDismiss, onBack = onDismiss) {
-        BracketAction(stringResource(R.string.style_icon_pack_clear), Palette.accent, onClick = onClear)
+        DrawableFilter(query) { query = it }
+        if (current != null) BracketAction(stringResource(R.string.style_icon_pack_clear), Palette.accent, onClick = onClear)
         LazyVerticalGrid(
             columns = GridCells.Adaptive(56.dp),
+            state = grid,
             modifier = Modifier.weight(1f).fillMaxWidth(),
             contentPadding = PaddingValues(4.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            gridItems(names, key = { it }) { name ->
-                Box(Modifier.clickable { onPick(name) }.padding(4.dp), contentAlignment = Alignment.Center) {
+            gridItems(shown, key = { it }) { name ->
+                val marked = name == current
+                Box(
+                    Modifier
+                        .clickable { onPick(name) }
+                        .then(if (marked) Modifier.frame(1.dp, Palette.accent, Palette.accent.copy(alpha = 0.15f), radius = 8.dp) else Modifier)
+                        .padding(4.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
                     PackDrawable(pack, name, dpi, 48.dp)
                 }
             }
         }
     }
+}
+
+@Composable
+private fun DrawableFilter(
+    query: String,
+    onQuery: (String) -> Unit,
+) {
+    BasicTextField(
+        value = query,
+        onValueChange = onQuery,
+        singleLine = true,
+        textStyle = Mono,
+        cursorBrush = SolidColor(Palette.accent),
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search, autoCorrectEnabled = false),
+        modifier =
+            Modifier
+                .padding(bottom = 8.dp)
+                .fillMaxWidth()
+                .leavesUpDown()
+                .clip(LauncherStyle.shape(8.dp))
+                .background(Palette.surface)
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+        decorationBox = { inner ->
+            Box {
+                if (query.isEmpty()) BasicText(stringResource(R.string.style_icon_pack_filter), style = Mono.copy(color = Palette.muted))
+                inner()
+            }
+        },
+    )
 }
 
 @Composable
@@ -300,22 +398,11 @@ private fun SuggestionsReview(
                 LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
                     items(shown, key = { it.first }) { (component, drawable) ->
                         val label = runtime.androidApps.apps.firstOrNull { iconComponentKey(it.component) == component }?.label ?: component
-                        Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    overrides.set(pack, component, drawable)
-                                    overrides.dropSuggestion(component)
-                                    rows = rows?.filterNot { it.first == component }
-                                    runtime.androidApps.reloadIcons()
-                                }.padding(vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            if (iconPack != null) PackDrawable(iconPack, drawable, dpi, 40.dp) else PackIcon(null, 40.dp)
-                            Column(Modifier.padding(start = 12.dp).weight(1f)) {
-                                BasicText(label, style = Mono.copy(color = Palette.foreground), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                BasicText(drawable, style = Mono.copy(color = Palette.muted, fontSize = TextSize.Small), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            }
+                        PackAppRow(label, drawable, iconPack, dpi) {
+                            overrides.set(pack, component, drawable)
+                            overrides.dropSuggestion(component)
+                            rows = rows?.filterNot { it.first == component }
+                            runtime.androidApps.reloadIcons()
                         }
                     }
                 }
@@ -337,16 +424,23 @@ private fun PackDrawable(
                 runCatching { pack.drawable(name, dpi)?.toIconBitmap(96) }.getOrNull()
             }
     }
-    PackIcon(bitmap, size)
+    // Accent, as the drawer tints a monochrome icon. A pack that follows the system night mode
+    // (Arcticons Day & Night draws dark lines in light mode) would otherwise vanish on this panel.
+    PackIcon(bitmap, size, tint = true)
 }
 
 @Composable
 private fun PackIcon(
     icon: ImageBitmap?,
     size: Dp,
+    tint: Boolean = false,
 ) {
     Box(Modifier.size(size), contentAlignment = Alignment.Center) {
-        if (icon != null) Image(icon, null, Modifier.size(size)) else BasicText("·", style = Mono.copy(color = Palette.muted))
+        if (icon != null) {
+            Image(icon, null, Modifier.size(size), colorFilter = if (tint) ColorFilter.tint(Palette.accent) else null)
+        } else {
+            BasicText("·", style = Mono.copy(color = Palette.muted))
+        }
     }
 }
 

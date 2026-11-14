@@ -40,4 +40,13 @@ class IconPackTest {
         assertEquals(listOf("one", "two"), IconPack.catalogNames(emptyList(), listOf("two", "one", "two", " ")))
         assertEquals(listOf("kept"), IconPack.catalogNames(listOf(" ", "kept"), listOf("other")))
     }
+
+    @Test fun filtersDrawableNamesBySubstringIgnoringCase() {
+        val names = listOf("phone", "headphone", "Mail", "discord")
+        assertEquals(names, IconPack.filterDrawableNames(names, ""))
+        assertEquals(names, IconPack.filterDrawableNames(names, "  "))
+        assertEquals(listOf("phone", "headphone"), IconPack.filterDrawableNames(names, "Pho"))
+        assertEquals(listOf("discord"), IconPack.filterDrawableNames(names, "cord"))
+        assertEquals(emptyList<String>(), IconPack.filterDrawableNames(names, "zzz"))
+    }
 }

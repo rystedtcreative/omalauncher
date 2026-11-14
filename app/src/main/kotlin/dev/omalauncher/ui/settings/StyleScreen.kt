@@ -707,7 +707,7 @@ private fun IconPackOption(
         ) { close ->
             ChoicePopup(options, selected, BelowAnchorStart, onDismiss = close, onPick = { pkg -> style.update { it.with(Style.ICON_PACK, pkg) } }, label = label)
         }
-        // Apps the pack doesn't cover, and the ones given another of its drawables.
+        // Every app's icon from this pack, including ones it already covers.
         if (selected != null) {
             BracketAction(stringResource(R.string.style_icon_pack_manage), Palette.accent, Modifier.padding(start = LabelWidth - 8.dp), onManage)
         }
