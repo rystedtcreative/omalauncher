@@ -24,14 +24,15 @@ class IconPack private constructor(
     /** [catalog], once drawable.xml (or the appfilter fallback) has been read. */
     private var catalogCache: List<String>? = null
 
+    /** Appfilter's drawable for [component]'s activity, or for its package when only the package is mapped. */
+    fun drawableName(component: ComponentName): String? =
+        names["${component.packageName}/${component.className}"] ?: names[component.packageName]
+
     /** [component]'s icon from the pack: for that activity, else for its app (an app that switched to another activity alias). */
     fun drawable(
         component: ComponentName,
         densityDpi: Int,
-    ): Drawable? {
-        val name = names["${component.packageName}/${component.className}"] ?: names[component.packageName] ?: return null
-        return drawable(name, densityDpi)
-    }
+    ): Drawable? = drawableName(component)?.let { drawable(it, densityDpi) }
 
     /**
      * [component]'s icon: [override] when the pack actually has that drawable, else the appfilter icon.
@@ -58,7 +59,7 @@ class IconPack private constructor(
     }
 
     /** Whether appfilter maps [component] itself or, failing that, its package. */
-    fun covers(component: ComponentName): Boolean = "${component.packageName}/${component.className}" in names || component.packageName in names
+    fun covers(component: ComponentName): Boolean = drawableName(component) != null
 
     /** As [covers]: the pack has an icon for [component] or its package. */
     fun hasIcon(component: ComponentName): Boolean = covers(component)
@@ -190,6 +191,18 @@ class IconPack private constructor(
             fromXml: List<String>,
             appfilterDrawables: Iterable<String>,
         ): List<String> = (if (fromXml.any { it.isNotBlank() }) fromXml else appfilterDrawables).map { it.trim() }.filter { it.isNotEmpty() }.distinct().sorted()
+
+        /**
+         * [names] containing [query], ignoring case, in the same order. A blank [query] (spaces included) keeps every name.
+         */
+        fun filterDrawableNames(
+            names: List<String>,
+            query: String,
+        ): List<String> {
+            val needle = query.trim()
+            if (needle.isEmpty()) return names
+            return names.filter { it.contains(needle, ignoreCase = true) }
+        }
 
         private fun readDrawableItems(parser: XmlPullParser): List<String> {
             val out = LinkedHashSet<String>()

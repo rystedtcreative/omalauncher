@@ -179,3 +179,42 @@ class IconOverrides(
             }
     }
 }
+
+/**
+ * Apps split by the current pack. An override wins over the pack's own icon.
+ * [missing] is what the suggest brief sends: no override, and the pack doesn't cover the app.
+ */
+data class IconAppGroups<T>(
+    val overridden: List<T>,
+    val covered: List<T>,
+    val missing: List<T>,
+)
+
+fun <T> partitionIconApps(
+    apps: List<T>,
+    hasOverride: (T) -> Boolean,
+    covers: (T) -> Boolean,
+): IconAppGroups<T> {
+    val overridden = ArrayList<T>()
+    val covered = ArrayList<T>()
+    val missing = ArrayList<T>()
+    for (app in apps) {
+        when {
+            hasOverride(app) -> overridden += app
+            covers(app) -> covered += app
+            else -> missing += app
+        }
+    }
+    return IconAppGroups(overridden, covered, missing)
+}
+
+/**
+ * Label and component rows for the suggest brief. [overridden] and [covered] are component keys (`package/class`).
+ * An app in both is left out, the same as [partitionIconApps] putting it with the overrides.
+ */
+fun suggestBriefRows(
+    apps: List<Pair<String, String>>,
+    overridden: Set<String>,
+    covered: Set<String>,
+): List<Pair<String, String>> =
+    partitionIconApps(apps, hasOverride = { it.second in overridden }, covers = { it.second in covered }).missing
